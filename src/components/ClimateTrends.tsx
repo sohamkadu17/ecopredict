@@ -15,12 +15,13 @@ import {
 } from "recharts";
 
 export function ClimateTrends() {
-  const [selectedMetric, setSelectedMetric] = useState<"temperature" | "rainfall">("temperature");
+  const [selectedMetric, setSelectedMetric] = useState<"temperature" | "rainfall" | "extremes">("temperature");
   const [viewMode, setViewMode] = useState<"chart" | "map">("chart");
 
   const metrics = [
-    { id: "temperature", label: "Average Temperature (°C)" },
-    { id: "rainfall", label: "Annual Rainfall (mm)" },
+    { id: "temperature", label: "Average Temperature (°C)", color: "#ef4444" },
+    { id: "rainfall", label: "Annual Rainfall (mm)", color: "#3b82f6" },
+    { id: "extremes", label: "Extreme Weather Events", color: "#eab308" },
   ];
 
   // Regional climate data for map
@@ -30,6 +31,7 @@ export function ClimateTrends() {
       position: { top: "55%", left: "15%" },
       tempTrend: "+0.6°C/decade",
       rainfallTrend: "-8mm/year",
+      extremesTrend: "+2.1 events/year",
       intensity: selectedMetric === "temperature" ? 0.85 : 0.65
     },
     { 
