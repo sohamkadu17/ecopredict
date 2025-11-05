@@ -1,19 +1,25 @@
-import { Search, Layers } from "lucide-react";
+import { Search, Layers, AlertTriangle } from "lucide-react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { useState } from "react";
 import { Badge } from "./ui/badge";
+import { riskAssessmentData, regionalClimateData } from "../lib/climateData";
 
 export function RiskMaps() {
   const [activeOverlay, setActiveOverlay] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
   const overlays = [
-    { id: "flood", label: "Flood Risk", color: "from-blue-500 to-cyan-500" },
-    { id: "drought", label: "Drought Zones", color: "from-yellow-500 to-orange-500" },
-    { id: "heatwave", label: "Heatwave Intensity", color: "from-red-500 to-pink-500" },
+    { id: "flood", label: "Flood Risk", color: "from-blue-500 to-cyan-500", data: riskAssessmentData.flood },
+    { id: "drought", label: "Drought Zones", color: "from-yellow-500 to-orange-500", data: riskAssessmentData.drought },
+    { id: "heatwave", label: "Heatwave Intensity", color: "from-red-500 to-pink-500", data: riskAssessmentData.heatwave },
   ];
+
+  // Filter cities based on search query
+  const filteredCities = regionalClimateData.filter(city => 
+    city.city.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const toggleOverlay = (id: string) => {
     setActiveOverlay((prev) =>

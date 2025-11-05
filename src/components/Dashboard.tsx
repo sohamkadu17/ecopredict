@@ -1,4 +1,4 @@
-import { Cloud, Droplets, Wind, AlertTriangle, Info, Sparkles } from "lucide-react";
+import { Cloud, Droplets, Wind, AlertTriangle, Info, Sparkles, Loader2 } from "lucide-react";
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -16,7 +16,31 @@ import {
   AreaChart,
 } from "recharts";
 import { useState, useEffect } from "react";
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
+import { fetchWeatherData, fetchAirQuality } from "../lib/weatherService";
+import { Alert, AlertDescription } from "./ui/alert";
+
+import { WeatherData } from '../lib/weatherService';
+
+interface WeeklyForecastDay {
+  day: string;
+  temp: number;
+  condition: string;
+  high: number;
+  low: number;
+}
+
+interface DayPrediction {
+  day: number;
+  temperature: number;
+  rainfall: number;
+}
+
+interface AqiItem {
+  pollutant: string;
+  value: number;
+  color: string;
+}
 
 interface DashboardProps {
   onOpenExplain: () => void;
@@ -25,50 +49,86 @@ interface DashboardProps {
 export function Dashboard({ onOpenExplain }: DashboardProps) {
   const [chartMode, setChartMode] = useState<"temperature" | "rainfall">("temperature");
   const [showSparkles, setShowSparkles] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
+  const [aqiData, setAqiData] = useState<{ list: Array<{ components: Record<string, number>; main: { aqi: number } }> } | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowSparkles(false), 3000);
     return () => clearTimeout(timer);
   }, []);
 
-  // Mock data for hourly forecast
-  const hourlyData = Array.from({ length: 24 }, (_, i) => ({
-    hour: i === 0 ? "Now" : `${i}h`,
-    temp: 28 + Math.sin(i / 3) * 5,
-    rain: Math.max(0, Math.sin(i / 4) * 40 + 20),
-  }));
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        // Using Mumbai coordinates as default (you can make this dynamic later)
+        const lat = 19.0760;
+        const lon = 72.8777;
+        
+        const [weather, airQuality] = await Promise.all([
+          fetchWeatherData(lat, lon),
+          fetchAirQuality(lat, lon)
+        ]);
 
-  // Mock data for 7-day forecast
-  const weeklyForecast = [
-    { day: "Mon", temp: 32, condition: "sunny", high: 35, low: 25 },
-    { day: "Tue", temp: 30, condition: "cloudy", high: 33, low: 24 },
-    { day: "Wed", temp: 28, condition: "rainy", high: 29, low: 22 },
-    { day: "Thu", temp: 29, condition: "cloudy", high: 31, low: 23 },
-    { day: "Fri", temp: 31, condition: "sunny", high: 34, low: 25 },
-    { day: "Sat", temp: 33, condition: "sunny", high: 36, low: 26 },
-    { day: "Sun", temp: 32, condition: "cloudy", high: 35, low: 25 },
-  ];
+        setWeatherData(weather);
+        setAqiData(airQuality);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch data');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // Mock data for 30-day predictions
-  const predictionData = Array.from({ length: 30 }, (_, i) => ({
+    fetchData();
+  }, []);
+
+  // Create mock prediction data
+  const predictionData: DayPrediction[] = Array.from({ length: 30 }, (_, i) => ({
     day: i + 1,
     temperature: 28 + Math.sin(i / 5) * 6 + i * 0.1,
     rainfall: Math.max(0, Math.sin(i / 4) * 30 + 25 + Math.random() * 10),
   }));
 
-  // Mock AQI data
-  const aqiData = [
-    { pollutant: "PM2.5", value: 45, color: "#fbbf24" },
-    { pollutant: "O₃", value: 32, color: "#34d399" },
-    { pollutant: "NO₂", value: 58, color: "#fb923c" },
-    { pollutant: "SO₂", value: 22, color: "#34d399" },
-    { pollutant: "CO", value: 38, color: "#fbbf24" },
+  // Transform API data for charts
+  const hourlyData = weatherData?.list?.slice(0, 8).map((item) => ({
+    hour: new Date(item.dt * 1000).getHours() + 'h',
+    temp: Math.round(item.main.temp),
+    rain: Math.round(item.pop * 100),
+  })) || [];
+
+  const weeklyForecast: WeeklyForecastDay[] = weatherData?.list?.filter((_, index) => index % 8 === 0).slice(0, 7).map((item) => ({
+    day: new Date(item.dt * 1000).toLocaleString('en-US', { weekday: 'short' }),
+    temp: Math.round(item.main.temp),
+    condition: item.weather[0].main.toLowerCase(),
+    high: Math.round(item.main.temp_max),
+    low: Math.round(item.main.temp_min),
+  })) || [];
+
+  const currentAqiComponents = aqiData?.list?.[0]?.components || {};
+  const aqiItems: AqiItem[] = [
+    { pollutant: "PM2.5", value: currentAqiComponents.pm2_5 || 0, color: "#fbbf24" },
+    { pollutant: "O₃", value: currentAqiComponents.o3 || 0, color: "#34d399" },
+    { pollutant: "NO₂", value: currentAqiComponents.no2 || 0, color: "#fb923c" },
+    { pollutant: "SO₂", value: currentAqiComponents.so2 || 0, color: "#34d399" },
+    { pollutant: "CO", value: currentAqiComponents.co || 0, color: "#fbbf24" },
   ];
 
   const getWeatherIcon = (condition: string) => {
-    if (condition === "sunny") return "☀️";
-    if (condition === "rainy") return "🌧️";
-    return "⛅";
+    switch (condition.toLowerCase()) {
+      case 'clear':
+        return "☀️";
+      case 'rain':
+        return "🌧️";
+      case 'clouds':
+        return "⛅";
+      case 'snow':
+        return "❄️";
+      default:
+        return "⛅";
+    }
   };
 
   const getAQIColor = (aqi: number) => {
@@ -77,8 +137,25 @@ export function Dashboard({ onOpenExplain }: DashboardProps) {
     return { color: "from-red-500 to-orange-500", text: "Unhealthy", ring: "border-red-500" };
   };
 
-  const currentAQI = 68;
+  const currentAQI = (aqiData?.list?.[0]?.main?.aqi ?? 0) * 20; // Converting 1-5 scale to 0-100
   const aqiStatus = getAQIColor(currentAQI);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6 relative">
@@ -137,9 +214,9 @@ export function Dashboard({ onOpenExplain }: DashboardProps) {
             <div className="flex items-center space-x-6">
               <div className="text-6xl">☀️</div>
               <div>
-                <div className="text-5xl text-white">32°C</div>
-                <p className="text-gray-400 mt-2">Feels like 35°C</p>
-                <p className="text-cyan-400 mt-1">Partly Cloudy</p>
+                <div className="text-5xl text-white">{Math.round(weatherData?.list?.[0]?.main?.temp || 0)}°C</div>
+                <p className="text-gray-400 mt-2">Feels like {Math.round(weatherData?.list?.[0]?.main?.feels_like || 0)}°C</p>
+                <p className="text-cyan-400 mt-1">{weatherData?.list?.[0]?.weather?.[0]?.main || 'Loading...'}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4 mt-6 md:mt-0">
@@ -147,14 +224,14 @@ export function Dashboard({ onOpenExplain }: DashboardProps) {
                 <Droplets className="text-cyan-400" size={20} />
                 <div>
                   <p className="text-xs text-gray-400">Humidity</p>
-                  <p className="text-white">65%</p>
+                  <p className="text-white">{weatherData?.list?.[0]?.main?.humidity || 0}%</p>
                 </div>
               </div>
               <div className="flex items-center space-x-2">
                 <Wind className="text-emerald-400" size={20} />
                 <div>
                   <p className="text-xs text-gray-400">Wind</p>
-                  <p className="text-white">12 km/h</p>
+                  <p className="text-white">{Math.round((weatherData?.list?.[0]?.wind?.speed || 0) * 3.6)} km/h</p>
                 </div>
               </div>
             </div>
@@ -290,7 +367,7 @@ export function Dashboard({ onOpenExplain }: DashboardProps) {
         <Card className="bg-gradient-to-br from-[#0f1629] to-[#1a2332] border-cyan-900/30 p-6">
           <h3 className="text-gray-300 mb-4">Air Quality Breakdown</h3>
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={aqiData}>
+            <BarChart data={aqiItems}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis dataKey="pollutant" stroke="#64748b" />
               <YAxis stroke="#64748b" />
